@@ -21,6 +21,7 @@ def webhook():
     # Extract the message text and sender's phone number
     incoming_message = request.form.get("Body", "").strip()
     sender = request.form.get("From", "")
+    sender = sender.replace("whatsapp:","")
 
     print(f"[INFO] Message from {sender}: {incoming_message}")
 
@@ -38,3 +39,4 @@ def webhook():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
