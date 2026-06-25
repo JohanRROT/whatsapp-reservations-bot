@@ -4,17 +4,41 @@ services:
     ports:
       - "5000:5000"
     env_file:
-      - .env.docker
+      - .env
     depends_on:
       - db
+
+  airflow-webserver:
+    image: apache/airflow:2.9.1
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@db/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    command: webserver
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1
+    depends_on:
+      - db
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@db/${AIRFLOW_DB_NAME}
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    command: scheduler
 
   db:
     image: postgres:16
     env_file:
-      - .env.docker
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker/init.sh:/docker-entrypoint-initdb.d/init.sh
 
 volumes:
   postgres_data:
