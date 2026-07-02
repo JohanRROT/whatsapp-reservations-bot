@@ -9,27 +9,39 @@ services:
       - db
 
   airflow-webserver:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     depends_on:
       - db
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
+      - PYTHONPATH=/opt/airflow
       - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@db/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./app:/opt/airflow/app
     command: webserver
 
   airflow-scheduler:
-    image: apache/airflow:2.9.1
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     depends_on:
       - db
+    env_file:
+      - .env
     environment:
+      - PYTHONPATH=/opt/airflow
       - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@db/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./app:/opt/airflow/app
     command: scheduler
 
   db:
