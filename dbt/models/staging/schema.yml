@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: stg_reservations
+    columns:
+      - name: reservation_id
+        data_tests:
+          - not_null
+          - unique
+  - name: stg_reminders
+    columns:
+      - name: reminder_id
+        data_tests:
+          - not_null
+          - unique
