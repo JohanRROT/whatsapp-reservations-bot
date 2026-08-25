@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: flask_bot
+    schema: public
+    tables:
+      - name: reservations
+      - name: reminders
+      - name: conversations

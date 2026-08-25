@@ -52,5 +52,18 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init.sh:/docker-entrypoint-initdb.d/init.sh
 
+  dbt:
+    build:
+      context: .
+      dockerfile: Dockerfile.dbt
+    env_file:
+      - .env
+    volumes:
+      - ./dbt:/usr/app/dbt
+      - ./dbt_profile:/root/.dbt
+    profiles: ["tools"]
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

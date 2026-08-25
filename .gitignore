@@ -16,3 +16,6 @@ __pycache__/
 Thumbs.db
 .env.docker
 get-docker.sh
+
+# dbt
+dbt_profile
