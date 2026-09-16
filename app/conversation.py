@@ -81,6 +81,46 @@ tools = [
                 "required": ["space_type", "date"]
             }
         }
+    },       
+    {
+        "type": "function",
+        "function": {
+            "name": "create_reservation",
+            "description": (
+                "Create a new reservation once the user has confirmed the space type, "
+                "date, time, and their name. Always call get_available_times first to "
+                "verify the requested time is free before calling this function. "
+                "Only call this after the user has explicitly confirmed they want to book."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "space_type": {
+                        "type": "string",
+                        "enum": ["hot_desk", "private_office", "meeting_room"],
+                        "description": "The type of space to reserve."
+                    },
+                    "date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "The reservation date, in YYYY-MM-DD format."
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "description": "Reservation start time, in HH:MM 24-hour format."
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "description": "Reservation end time, in HH:MM 24-hour format."
+                   },
+                    "guest_name": {
+                        "type": "string",
+                        "description": "Full name of the person the reservation is for."
+                    }
+                },
+                "required": ["space_type", "date", "start_time", "end_time", "guest_name"]
+            }
+        }
     }
 ]
 
@@ -193,26 +233,35 @@ def get_ai_response(sender: str, user_message: str) -> str:
 
         if function_name == "get_available_times":
             result = get_available_times(function_arg["space_type"], datetime.strptime(function_arg["date"],"%Y-%m-%d").date())
-            formatted_result = [f"{start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}" for start_time, end_time in result]
+
+        elif function_name == "create_reservation":
+            result = create_reservation(sender,function_arg["space_type"],datetime.strptime(function_arg["start_time"],"%H:%M").time(),datetime.strptime(function_arg["end_time"],"%H:%M").time(),function_arg["guest_name"],datetime.strptime(function_arg["date"],"%Y-%m-%d").date())
+
         else:
             result = None
 
-        second_response = client.chat.completions.create(
-             model="gpt-4o-mini",
-             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                *history,
-                response_message,  # el mensaje del modelo pidiendo la función
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": str(formatted_result)
-                }
-            ],
-            max_tokens=300,
-            temperature=0.7
-        )
-        ai_message = second_response.choices[0].message.content
+        formatted_result = format_tool_result(function_name, result)
+        try:
+            logger.info(f"DEBUG - formatted_result sent to model: {formatted_result}")
+            second_response = client.chat.completions.create(
+                 model="gpt-4o-mini",
+                 messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    *history,
+                    response_message,  # el mensaje del modelo pidiendo la función
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(formatted_result)
+                    }
+                ],
+                max_tokens=300,
+                temperature=0.7
+            )
+            ai_message = second_response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"OpenAI API call failed: {e}")
+            return "En este momento el agente no se encuentra disponible, sin embargo la reserva pudo haberse realizado, confirmela nuevamente con el agente en unos minutos"
 
     else:
         ai_message = response_message.content
@@ -249,3 +298,41 @@ def get_available_times(space_type, date_c):
     
     return gaps
 
+def create_reservation(phone_number, space_type, start_time, end_time, guest_name, date_c):
+    gaps = get_available_times(space_type, date_c)
+    start_time_full = datetime.combine(date_c, start_time, tzinfo=timezone.utc)
+    end_time_full = datetime.combine(date_c, end_time, tzinfo=timezone.utc)
+    if any(start_time_full >= gap_start and end_time_full <= gap_end for gap_start, gap_end in gaps):
+        try:
+            with get_connection() as conn:
+                with conn.cursor() as cursor:
+                    query = """
+                        INSERT INTO reservations
+                        (phone_number, space_type, start_time, end_time, guest_name)
+                        VALUES (%s,%s,%s,%s,%s);
+                        """
+                    cursor.execute(query, (phone_number, space_type, start_time_full, end_time_full, guest_name,))
+                conn.commit()
+            return {"success": True, "space_type":space_type, "start_time": start_time_full, "end_time": end_time_full}
+        except Exception as e:
+            logger.error(f"Failed to insert register in reservations table: {e}")
+            return {"success": False, "reason": "database_error"}
+    else:
+        return {"success": False, "reason": "time_unavailable", "available_time": gaps}
+
+def format_tool_result(function_name, result):
+    if function_name == "get_available_times":
+        formatted_result = [f"{start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}" for start_time, end_time in result]
+    elif function_name == "create_reservation":
+        if result["success"]:
+            formatted_result = f"reservation confirmed: {result['space_type']} from {result['start_time'].strftime('%H:%M')} to {result['end_time'].strftime('%H:%M')}"
+        else:
+            if result["reason"] == "time_unavailable":
+                available = [f"{s.strftime('%H:%M')}-{e.strftime('%H:%M')}" for s,e in result["available_time"]]
+                formatted_result = f"That time is not available. Available slots: {available}"
+            else:
+                formatted_result = "Sorry, there was a technical error creating the reservation"
+    else:
+        formatted_result = "Sorry, there was a technical error with formet result"
+
+    return formatted_result
