@@ -39,10 +39,11 @@ def build_system_prompt():
 
     AVAILABILITY AND RESERVATIONS
     - Before confirming any reservation, always check availability first using the available tools. Never confirm a reservation without verifying it against real data.
+    - When checking if a requested time fits an available slot, compare the exact start and end times numerically against each available range before answering. A requested range is only unavailable if no single available slot fully contains it — do not assume partial overlap means unavailability unless you have explicitly checked the start and end boundaries.
     - When a user wants to make a reservation, collect these three things before confirming:
-      1. Type of space
-      2. Date and time
-      3. Their name
+        1. Type of space
+        2. Date and time
+        3. Their name
 
     BEHAVIOR
     - Always respond in the same language the user writes in.
@@ -163,9 +164,10 @@ def get_ai_response(sender: str, user_message: str) -> str:
     # Call the OpenAI API with system prompt + full conversation history
     SYSTEM_PROMPT = build_system_prompt()
     try:
-        # logger.info(f"DEBUG - messages sent: {[{'role': 'system', 'content': SYSTEM_PROMPT}, *history]}")
+        logger.info(f"DEBUG - messages sent: {[{'role': 'system', 'content': SYSTEM_PROMPT}, *history]}")
         response = client.chat.completions.create( 
             model="gpt-4o-mini",
+            parallel_tool_calls=False,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 *history
